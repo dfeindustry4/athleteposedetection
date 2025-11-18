@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pose } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
 import * as mpDrawing from '@mediapipe/drawing_utils';
+import { angle3D } from './utils/calculation';
+
 
 export default function PoseCamera() {
   const videoRef = useRef(null);
@@ -15,6 +17,9 @@ export default function PoseCamera() {
   const [modelComplexity, setModelComplexity] = useState(1); // 0,1,2
   const [fps, setFps] = useState(0);
   const [lastResult, setLastResult] = useState(null);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+
+
 
   useEffect(() => {
     const pose = new Pose({
@@ -56,6 +61,46 @@ export default function PoseCamera() {
     };
   }, []);
 
+
+  let recordedChunks = [];
+
+
+  function startRecording() {
+      const canvas = canvasRef.current;
+      const stream = canvas.captureStream(30); // capture canvas as video
+      const Recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+      setMediaRecorder(Recorder);
+      Recorder.ondataavailable = e => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
+      };
+
+      Recorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: 'video/webm' });
+          recordedChunks = [];
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'mediapipe_recording.webm';
+          a.click();
+          URL.revokeObjectURL(url);
+      };
+
+      Recorder.start();
+      console.log('Recording started');
+      console.log(Recorder);
+  }
+
+  function stopRecording() {
+    console.log("Stop recording");
+    console.log(mediaRecorder.state);
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        console.log('Recording stopped');
+    }
+    stopCamera();
+  }
+
+
   function startCamera() {
     if (running) return;
     const video = videoRef.current;
@@ -75,9 +120,12 @@ export default function PoseCamera() {
     cameraRef.current = camera;
     setRunning(true);
     startFpsCounter();
+    startRecording();
   }
 
   function stopCamera() {
+    console.log("Stop Camara");
+    // stopRecording();
     if (cameraRef.current) {
       try { cameraRef.current.stop(); } catch (e) { /* ignore */ }
       cameraRef.current = null;
@@ -85,6 +133,7 @@ export default function PoseCamera() {
     setRunning(false);
     stopFpsCounter();
     clearCanvas();
+
   }
 
   const fpsCounter = useRef({ last: performance.now(), frames: 0 });
@@ -117,10 +166,32 @@ export default function PoseCamera() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
+  function getSafeLandmark(landmarks, index) {
+    return landmarks && landmarks[index] ? landmarks[index] : null;
+  }
+
   function onResults(results) {
     setLastResult(results);
     drawResults(results);
   }
+
+  function drawAngle(ctx, a, b, c, angle) {
+    if (!a || !b || !c || angle == null) return;
+    const canvas = canvasRef.current;
+    ctx.fillStyle = "yellow";
+    ctx.font = "20px Arial";
+
+    ctx.beginPath();
+    ctx.arc(b.x * canvas.width, b.y * canvas.height, 8, 0, 2 * Math.PI);
+    ctx.fill();
+
+    ctx.fillText(
+      angle.toFixed(1) + "°",
+      b.x * canvas.width + 10,
+      b.y * canvas.height + 10
+    );
+  }
+
 
   function drawResults(results) {
     const canvas = canvasRef.current;
@@ -152,6 +223,104 @@ export default function PoseCamera() {
         lineWidth: 4
       });
       mpDrawing.drawLandmarks(ctx, results.poseLandmarks, { radius: 4 });
+      if(results.poseLandmarks && results.poseLandmarks.length>0){
+        
+        const lm = results.poseLandmarks;
+      const toPx = (p) => ({
+        x: p.x * canvas.width,
+        y: p.y * canvas.height,
+      });
+
+        // const LS = getSafeLandmark(lm, 11);
+        // const LE = getSafeLandmark(lm, 13);
+        // const LW = getSafeLandmark(lm, 15);
+
+        const LS = toPx(lm[11]);
+        const LE = toPx(lm[13]);
+        const LW = toPx(lm[15]);
+        ctx.strokeStyle = "#00ff00";
+        ctx.lineWidth = 4;
+
+        ctx.beginPath();
+        ctx.moveTo(LS.x, LS.y);
+        ctx.lineTo(LE.x, LE.y);
+        ctx.lineTo(LW.x, LW.y);
+        ctx.stroke();
+
+        // RIGHT ARM (12 → 14 → 16)
+        // const RS = getSafeLandmark(lm, 12);
+        // const RE = getSafeLandmark(lm, 14);
+        // const RW = getSafeLandmark(lm, 16);
+
+        const RS = toPx(lm[12]);
+        const RE = toPx(lm[14]);
+        const RW = toPx(lm[16]);
+
+        ctx.beginPath();
+        ctx.moveTo(RS.x, RS.y);
+        ctx.lineTo(RE.x, RE.y);
+        ctx.lineTo(RW.x, RW.y);
+        ctx.stroke();
+
+
+        // LEFT LEG (23 → 25 → 27)
+        // const LH = getSafeLandmark(lm, 23);
+        // const LK = getSafeLandmark(lm, 25);
+        // const LA = getSafeLandmark(lm, 27);
+        const LH = toPx(lm[23]);
+        const LK = toPx(lm[25]);
+        const LA = toPx(lm[27]);
+
+
+        ctx.beginPath();
+        ctx.moveTo(LH.x, LH.y);
+        ctx.lineTo(LK.x, LK.y);
+        ctx.lineTo(LA.x, LA.y);
+        ctx.stroke();
+
+        // RIGHT LEG (24 → 26 → 28)
+        // const RH = getSafeLandmark(lm, 24);
+        // const RK = getSafeLandmark(lm, 26);
+        // const RA = getSafeLandmark(lm, 28);
+        const RH = toPx(lm[24]);
+        const RK = toPx(lm[26]);
+        const RA = toPx(lm[28]);
+
+        ctx.beginPath();
+        ctx.moveTo(RH.x, RH.y);
+        ctx.lineTo(RK.x, RK.y);
+        ctx.lineTo(RA.x, RA.y);
+        ctx.stroke();
+
+        // Draw angle text
+        const leftElbowAngle = angle3D(LS, LE, LW);
+        // ctx.fillStyle = "#00ff00";
+        // ctx.font = "26px Arial";
+        // ctx.fillText(`${leftElbowAngle}°`, LE.x + 10, LE.y - 10);
+
+        const rightElbowAngle = angle3D(RS, RE, RW);
+        // ctx.fillStyle = "#00ff00";
+        // ctx.font = "26px Arial";
+        // ctx.fillText(`${rightElbowAngle}°`, RE.x + 10, RE.y - 10);
+
+        const leftKneeAngle = angle3D(LH, LK, LA);
+        // ctx.fillStyle = "#00ff00";
+        // ctx.font = "26px Arial";
+        // ctx.fillText(`${leftKneeAngle}°`, LK.x + 10, LK.y - 10);
+
+        const rightKneeAngle = angle3D(RH, RK, RA);
+        // ctx.fillStyle = "#00ff00";
+        // ctx.font = "26px Arial";
+        // ctx.fillText(`${rightKneeAngle}°`, RK.x + 10, RK.y - 10);
+
+        // drawAngle(ctx, LS, LE, LW, leftElbowAngle);
+        // drawAngle(ctx, RS, RE, RW, rightElbowAngle);
+
+        // drawAngle(ctx, LH, LK, LA, leftKneeAngle);
+        // drawAngle(ctx, RH, RK, RA, rightKneeAngle);
+
+
+      }
     }
 
     ctx.restore();
@@ -187,7 +356,7 @@ export default function PoseCamera() {
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <div style={{ fontSize: 13 }}>FPS: <strong style={{ fontFamily: 'monospace' }}>{fps}</strong></div>
-            <button onClick={() => (running ? stopCamera() : startCamera())} style={{ padding: '8px 12px', borderRadius: 8, background: '#4f46e5', color: 'white', border: 'none' }}>
+            <button onClick={() => (running ? stopRecording() : startCamera())} style={{ padding: '8px 12px', borderRadius: 8, background: '#4f46e5', color: 'white', border: 'none' }}>
               {running ? 'Stop' : 'Start'}
             </button>
             <button onClick={() => setMirror(m => !m)} style={{ padding: '8px 12px', borderRadius: 8, background: '#374151', color: 'white', border: 'none' }}>
@@ -238,6 +407,7 @@ export default function PoseCamera() {
     return {
       landmarkCount: results.poseLandmarks.length,
       firstLandmarks: results.poseLandmarks.slice(0, 5).map(lm => ({ x: lm.x?.toFixed?.(3), y: lm.y?.toFixed?.(3), z: lm.z?.toFixed?.(3), visibility: lm.visibility?.toFixed ? Number(lm.visibility.toFixed(3)) : lm.visibility }))
+      
     };
 }
   }
