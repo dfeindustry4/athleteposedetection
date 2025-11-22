@@ -11,6 +11,7 @@ export default function PoseCamera() {
   const cameraRef = useRef(null);
   const poseRef = useRef(null);
   const rafRef = useRef(null);
+  const timerRef = useRef(null);
 
   const [running, setRunning] = useState(false);
   const [mirror, setMirror] = useState(true);
@@ -86,17 +87,25 @@ export default function PoseCamera() {
       };
 
       Recorder.start();
+      // ⏱ Auto-stop timer (5 min = 300000 ms)
+      timerRef.current = setTimeout(() => {
+        Recorder.stop(); 
+        stopRecording();
+      }, 300000);
       console.log('Recording started');
       console.log(Recorder);
   }
 
   function stopRecording() {
+    if (timerRef.current) clearTimeout(timerRef.current);
     console.log("Stop recording");
-    console.log(mediaRecorder.state);
+      
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-        console.log('Recording stopped');
+        console.log(mediaRecorder.state);
+        mediaRecorder.stop(); 
     }
+    
+    console.log('Recording stopped');
     stopCamera();
   }
 
@@ -118,6 +127,8 @@ export default function PoseCamera() {
 
     camera.start();
     cameraRef.current = camera;
+
+
     setRunning(true);
     startFpsCounter();
     startRecording();
@@ -125,6 +136,8 @@ export default function PoseCamera() {
 
   function stopCamera() {
     console.log("Stop Camara");
+   
+    
     // stopRecording();
     if (cameraRef.current) {
       try { cameraRef.current.stop(); } catch (e) { /* ignore */ }
