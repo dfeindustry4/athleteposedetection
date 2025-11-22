@@ -65,6 +65,9 @@ export default function PoseCamera() {
 
   let recordedChunks = [];
 
+  const getFilename = (ext = "mp4") => {
+    return new Date().toISOString().replace(/[:.]/g, "-") + "." + ext;
+  };
 
   function startRecording() {
       const canvas = canvasRef.current;
@@ -81,7 +84,8 @@ export default function PoseCamera() {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = 'mediapipe_recording.webm';
+          // a.download = 'mediapipe_recording.webm';
+          a.download = getFilename("webm");
           a.click();
           URL.revokeObjectURL(url);
       };
